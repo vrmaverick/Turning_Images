@@ -89,6 +89,73 @@
             color: #007bff;
             font-size: 16px;
             margin: 20px 0;
+            text-align: center;
+        }
+
+        .loading-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .progress-bar {
+            width: 300px;
+            height: 8px;
+            background: #e9ecef;
+            border-radius: 4px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #007bff, #0056b3);
+            border-radius: 4px;
+            transition: width 0.3s ease;
+            width: 0%;
+        }
+
+        .loading-stats {
+            display: flex;
+            justify-content: space-between;
+            width: 300px;
+            font-size: 12px;
+            color: #666;
+        }
+
+        .spinner {
+            border: 3px solid #e9ecef;
+            border-top: 3px solid #007bff;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .performance-info {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            font-size: 14px;
+            color: #495057;
+            display: none;
+        }
+
+        .perf-stat {
+            display: flex;
+            justify-content: space-between;
+            margin: 5px 0;
+        }
+
+        .perf-stat strong {
+            color: #007bff;
         }
 
         .auto-rotate-btn {
@@ -111,7 +178,38 @@
 <body>
     <div class="viewer-container">
         <h2>360° Product Viewer</h2>
-        <div class="loading" id="loading">Loading images...</div>
+        
+        <div class="loading-container" id="loadingContainer">
+            <div class="spinner"></div>
+            <div class="loading" id="loading">Initializing...</div>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+            <div class="loading-stats">
+                <span id="loadedCount">0 / 45 images</span>
+                <span id="loadingTime">0.0s</span>
+            </div>
+        </div>
+
+        <div class="performance-info" id="performanceInfo">
+            <h4>Loading Performance</h4>
+            <div class="perf-stat">
+                <span>Total Loading Time:</span>
+                <strong id="totalTime">-</strong>
+            </div>
+            <div class="perf-stat">
+                <span>Average per Image:</span>
+                <strong id="avgTime">-</strong>
+            </div>
+            <div class="perf-stat">
+                <span>Total Images:</span>
+                <strong id="totalImages">45</strong>
+            </div>
+            <div class="perf-stat">
+                <span>Loading Speed:</span>
+                <strong id="loadingSpeed">-</strong>
+            </div>
+        </div>
         
         <div class="product-viewer" id="viewer" style="display: none;">
             <img class="product-image" id="productImage" alt="Product view" />
@@ -120,7 +218,7 @@
         <div class="controls" id="controls" style="display: none;">
             <button class="control-btn" onclick="prevFrame()">◀ Prev</button>
             <div class="frame-counter">
-                Frame: <span id="frameCount">1</span> / 44
+                Frame: <span id="frameCount">1</span> / 45
             </div>
             <button class="control-btn" onclick="nextFrame()">Next ▶</button>
             <button class="control-btn auto-rotate-btn" id="autoRotateBtn" onclick="toggleAutoRotate()">
@@ -145,25 +243,55 @@
                 this.autoRotate = false;
                 this.autoRotateInterval = null;
                 
+                // Loading tracking
+                this.loadStartTime = Date.now();
+                this.loadedImages = 0;
+                this.loadingTimer = null;
+                
                 this.viewer = document.getElementById('viewer');
                 this.image = document.getElementById('productImage');
                 this.frameCounter = document.getElementById('frameCount');
                 this.loading = document.getElementById('loading');
+                this.loadingContainer = document.getElementById('loadingContainer');
                 this.controls = document.getElementById('controls');
                 this.instructions = document.getElementById('instructions');
                 this.autoRotateBtn = document.getElementById('autoRotateBtn');
+                this.performanceInfo = document.getElementById('performanceInfo');
+                
+                // Loading elements
+                this.progressFill = document.getElementById('progressFill');
+                this.loadedCount = document.getElementById('loadedCount');
+                this.loadingTime = document.getElementById('loadingTime');
                 
                 this.init();
             }
 
             async init() {
+                this.loading.textContent = 'Generating image URLs...';
+                this.startLoadingTimer();
+                
                 // Generate demo images (replace with your actual image URLs)
                 this.generateDemoImages();
+                
+                this.loading.textContent = 'Loading images...';
                 await this.preloadImages();
+                
                 this.setupEventListeners();
                 this.showViewer();
             }
 
+            startLoadingTimer() {
+                this.loadingTimer = setInterval(() => {
+                    const elapsed = (Date.now() - this.loadStartTime) / 1000;
+                    this.loadingTime.textContent = elapsed.toFixed(1) + 's';
+                }, 100);
+            }
+
+            updateProgress() {
+                const progress = (this.loadedImages / this.totalFrames) * 100;
+                this.progressFill.style.width = progress + '%';
+                this.loadedCount.textContent = `${this.loadedImages} / ${this.totalFrames} images`;
+            }
             generateDemoImages() {
                 // Replace this with your actual image URLs
                 // Example: ['product_001.jpg', 'product_002.jpg', ...]
@@ -175,11 +303,20 @@
             }
 
             async preloadImages() {
-                const promises = this.images.map(src => {
+                const promises = this.images.map((src, index) => {
                     return new Promise((resolve, reject) => {
                         const img = new Image();
-                        img.onload = resolve;
-                        img.onerror = reject;
+                        img.onload = () => {
+                            this.loadedImages++;
+                            this.updateProgress();
+                            resolve();
+                        };
+                        img.onerror = () => {
+                            this.loadedImages++;
+                            this.updateProgress();
+                            console.warn(`Failed to load image ${index + 1}`);
+                            resolve(); // Continue even if some images fail
+                        };
                         img.src = src;
                     });
                 });
@@ -189,13 +326,32 @@
                     this.isLoaded = true;
                 } catch (error) {
                     console.error('Error loading images:', error);
-                    this.loading.textContent = 'Error loading images. Using demo placeholders.';
                     this.isLoaded = true;
                 }
+                
+                // Stop the loading timer
+                if (this.loadingTimer) {
+                    clearInterval(this.loadingTimer);
+                }
+                
+                // Calculate final stats
+                const totalTime = (Date.now() - this.loadStartTime) / 1000;
+                this.displayPerformanceStats(totalTime);
+            }
+
+            displayPerformanceStats(totalTime) {
+                document.getElementById('totalTime').textContent = totalTime.toFixed(2) + 's';
+                document.getElementById('avgTime').textContent = (totalTime / this.totalFrames * 1000).toFixed(0) + 'ms';
+                document.getElementById('loadingSpeed').textContent = (this.totalFrames / totalTime).toFixed(1) + ' img/s';
+                
+                // Show performance info
+                setTimeout(() => {
+                    this.performanceInfo.style.display = 'block';
+                }, 500);
             }
 
             showViewer() {
-                this.loading.style.display = 'none';
+                this.loadingContainer.style.display = 'none';
                 this.viewer.style.display = 'inline-block';
                 this.controls.style.display = 'flex';
                 this.instructions.style.display = 'block';
@@ -331,32 +487,5 @@
             viewer = new ProductViewer();
         });
     </script>
-    <script>
-    window.addEventListener('load', () => {
-        const navEntry = performance.getEntriesByType("navigation")[0];
-
-        const pageLoadTime = navEntry.loadEventEnd - navEntry.startTime;
-        const resources = performance.getEntriesByType("resource");
-        const totalResources = resources.length;
-        const totalBytes = resources.reduce((sum, r) => sum + (r.transferSize || 0), 0) / 1024;
-
-        const metricsContainer = document.createElement('div');
-        metricsContainer.style.marginTop = '30px';
-        metricsContainer.style.fontSize = '14px';
-        metricsContainer.style.background = '#fff8e1';
-        metricsContainer.style.border = '1px solid #ffe082';
-        metricsContainer.style.padding = '12px 16px';
-        metricsContainer.style.borderRadius = '8px';
-        metricsContainer.style.color = '#333';
-        metricsContainer.innerHTML = `
-            <strong>Performance Metrics:</strong><br>
-            ⏱ Page Load Time: <strong>${Math.round(pageLoadTime)} ms</strong><br>
-            📦 Total Resources: <strong>${totalResources}</strong><br>
-            📁 Total Page Size: <strong>${totalBytes.toFixed(2)} KB</strong>
-        `;
-
-        document.querySelector('.viewer-container').appendChild(metricsContainer);
-    });
-</script>
 </body>
 </html>
