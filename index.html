@@ -331,5 +331,32 @@
             viewer = new ProductViewer();
         });
     </script>
+    <script>
+    window.addEventListener('load', () => {
+        const navEntry = performance.getEntriesByType("navigation")[0];
+
+        const pageLoadTime = navEntry.loadEventEnd - navEntry.startTime;
+        const resources = performance.getEntriesByType("resource");
+        const totalResources = resources.length;
+        const totalBytes = resources.reduce((sum, r) => sum + (r.transferSize || 0), 0) / 1024;
+
+        const metricsContainer = document.createElement('div');
+        metricsContainer.style.marginTop = '30px';
+        metricsContainer.style.fontSize = '14px';
+        metricsContainer.style.background = '#fff8e1';
+        metricsContainer.style.border = '1px solid #ffe082';
+        metricsContainer.style.padding = '12px 16px';
+        metricsContainer.style.borderRadius = '8px';
+        metricsContainer.style.color = '#333';
+        metricsContainer.innerHTML = `
+            <strong>Performance Metrics:</strong><br>
+            ⏱ Page Load Time: <strong>${Math.round(pageLoadTime)} ms</strong><br>
+            📦 Total Resources: <strong>${totalResources}</strong><br>
+            📁 Total Page Size: <strong>${totalBytes.toFixed(2)} KB</strong>
+        `;
+
+        document.querySelector('.viewer-container').appendChild(metricsContainer);
+    });
+</script>
 </body>
 </html>
