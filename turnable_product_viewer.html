@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>360° Product Viewer</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            background: #f0f0f0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .viewer-container {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            padding: 20px;
+            max-width: 600px;
+            text-align: center;
+        }
+
+        .product-viewer {
+            position: relative;
+            display: inline-block;
+            cursor: grab;
+            border-radius: 8px;
+            overflow: hidden;
+            background: #f8f8f8;
+        }
+
+        .product-viewer:active {
+            cursor: grabbing;
+        }
+
+        .product-image {
+            width: 500px;
+            height: 400px;
+            object-fit: contain;
+            display: block;
+            user-select: none;
+            -webkit-user-select: none;
+            pointer-events: none;
+        }
+
+        .controls {
+            margin-top: 20px;
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            align-items: center;
+        }
+
+        .control-btn {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+
+        .control-btn:hover {
+            background: #0056b3;
+        }
+
+        .frame-counter {
+            background: #e9ecef;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 14px;
+            color: #495057;
+        }
+
+        .instructions {
+            margin-top: 15px;
+            color: #666;
+            font-size: 14px;
+        }
+
+        .loading {
+            color: #007bff;
+            font-size: 16px;
+            margin: 20px 0;
+        }
+
+        .auto-rotate-btn {
+            background: #28a745;
+        }
+
+        .auto-rotate-btn:hover {
+            background: #1e7e34;
+        }
+
+        .auto-rotate-btn.active {
+            background: #dc3545;
+        }
+
+        .auto-rotate-btn.active:hover {
+            background: #c82333;
+        }
+    </style>
+</head>
+<body>
+    <div class="viewer-container">
+        <h2>360° Product Viewer</h2>
+        <div class="loading" id="loading">Loading images...</div>
+        
+        <div class="product-viewer" id="viewer" style="display: none;">
+            <img class="product-image" id="productImage" alt="Product view" />
+        </div>
+
+        <div class="controls" id="controls" style="display: none;">
+            <button class="control-btn" onclick="prevFrame()">◀ Prev</button>
+            <div class="frame-counter">
+                Frame: <span id="frameCount">1</span> / 44
+            </div>
+            <button class="control-btn" onclick="nextFrame()">Next ▶</button>
+            <button class="control-btn auto-rotate-btn" id="autoRotateBtn" onclick="toggleAutoRotate()">
+                Auto Rotate
+            </button>
+        </div>
+
+        <div class="instructions" id="instructions" style="display: none;">
+            Drag left or right to rotate the product • Click and hold to spin
+        </div>
+    </div>
+
+    <script>
+        class ProductViewer {
+            constructor() {
+                this.totalFrames = 44;
+                this.currentFrame = 0;
+                this.images = [];
+                this.isLoaded = false;
+                this.isDragging = false;
+                this.startX = 0;
+                this.autoRotate = false;
+                this.autoRotateInterval = null;
+                
+                this.viewer = document.getElementById('viewer');
+                this.image = document.getElementById('productImage');
+                this.frameCounter = document.getElementById('frameCount');
+                this.loading = document.getElementById('loading');
+                this.controls = document.getElementById('controls');
+                this.instructions = document.getElementById('instructions');
+                this.autoRotateBtn = document.getElementById('autoRotateBtn');
+                
+                this.init();
+            }
+
+            async init() {
+                // Generate demo images (replace with your actual image URLs)
+                this.generateDemoImages();
+                await this.preloadImages();
+                this.setupEventListeners();
+                this.showViewer();
+            }
+
+            generateDemoImages() {
+                // Replace this with your actual image URLs
+                // Example: ['product_001.jpg', 'product_002.jpg', ...]
+                for (let i = 1; i <= this.totalFrames; i++) {
+                    // const frameNumber = i.toString().padStart(3, '0');
+                    // Replace with your image path pattern
+                    this.images.push(`downloaded_image${i}.jpg`);
+                }
+            }
+
+            async preloadImages() {
+                const promises = this.images.map(src => {
+                    return new Promise((resolve, reject) => {
+                        const img = new Image();
+                        img.onload = resolve;
+                        img.onerror = reject;
+                        img.src = src;
+                    });
+                });
+
+                try {
+                    await Promise.all(promises);
+                    this.isLoaded = true;
+                } catch (error) {
+                    console.error('Error loading images:', error);
+                    this.loading.textContent = 'Error loading images. Using demo placeholders.';
+                    this.isLoaded = true;
+                }
+            }
+
+            showViewer() {
+                this.loading.style.display = 'none';
+                this.viewer.style.display = 'inline-block';
+                this.controls.style.display = 'flex';
+                this.instructions.style.display = 'block';
+                this.updateImage();
+            }
+
+            setupEventListeners() {
+                // Mouse events
+                this.viewer.addEventListener('mousedown', this.onMouseDown.bind(this));
+                document.addEventListener('mousemove', this.onMouseMove.bind(this));
+                document.addEventListener('mouseup', this.onMouseUp.bind(this));
+
+                // Touch events for mobile
+                this.viewer.addEventListener('touchstart', this.onTouchStart.bind(this));
+                document.addEventListener('touchmove', this.onTouchMove.bind(this));
+                document.addEventListener('touchend', this.onTouchEnd.bind(this));
+
+                // Prevent context menu
+                this.viewer.addEventListener('contextmenu', e => e.preventDefault());
+            }
+
+            onMouseDown(e) {
+                this.isDragging = true;
+                this.startX = e.clientX;
+                this.viewer.style.cursor = 'grabbing';
+            }
+
+            onMouseMove(e) {
+                if (!this.isDragging) return;
+                
+                const deltaX = e.clientX - this.startX;
+                const sensitivity = 3; // Adjust sensitivity (lower = more sensitive)
+                
+                if (Math.abs(deltaX) > sensitivity) {
+                    if (deltaX > 0) {
+                        this.nextFrame();
+                    } else {
+                        this.prevFrame();
+                    }
+                    this.startX = e.clientX;
+                }
+            }
+
+            onMouseUp() {
+                this.isDragging = false;
+                this.viewer.style.cursor = 'grab';
+            }
+
+            onTouchStart(e) {
+                e.preventDefault();
+                this.isDragging = true;
+                this.startX = e.touches[0].clientX;
+            }
+
+            onTouchMove(e) {
+                if (!this.isDragging) return;
+                e.preventDefault();
+                
+                const deltaX = e.touches[0].clientX - this.startX;
+                const sensitivity = 5;
+                
+                if (Math.abs(deltaX) > sensitivity) {
+                    if (deltaX > 0) {
+                        this.nextFrame();
+                    } else {
+                        this.prevFrame();
+                    }
+                    this.startX = e.touches[0].clientX;
+                }
+            }
+
+            onTouchEnd(e) {
+                e.preventDefault();
+                this.isDragging = false;
+            }
+
+            nextFrame() {
+                this.currentFrame = (this.currentFrame + 1) % this.totalFrames;
+                this.updateImage();
+            }
+
+            prevFrame() {
+                this.currentFrame = (this.currentFrame - 1 + this.totalFrames) % this.totalFrames;
+                this.updateImage();
+            }
+
+            updateImage() {
+                if (!this.isLoaded) return;
+                
+                this.image.src = this.images[this.currentFrame];
+                this.frameCounter.textContent = this.currentFrame + 1;
+            }
+
+            toggleAutoRotate() {
+                this.autoRotate = !this.autoRotate;
+                
+                if (this.autoRotate) {
+                    this.autoRotateBtn.textContent = 'Stop Auto';
+                    this.autoRotateBtn.classList.add('active');
+                    this.autoRotateInterval = setInterval(() => {
+                        this.nextFrame();
+                    }, 100); // Adjust speed (lower = faster)
+                } else {
+                    this.autoRotateBtn.textContent = 'Auto Rotate';
+                    this.autoRotateBtn.classList.remove('active');
+                    clearInterval(this.autoRotateInterval);
+                }
+            }
+
+            goToFrame(frameIndex) {
+                this.currentFrame = Math.max(0, Math.min(frameIndex, this.totalFrames - 1));
+                this.updateImage();
+            }
+        }
+
+        // Global functions for buttons
+        let viewer;
+
+        function nextFrame() {
+            viewer.nextFrame();
+        }
+
+        function prevFrame() {
+            viewer.prevFrame();
+        }
+
+        function toggleAutoRotate() {
+            viewer.toggleAutoRotate();
+        }
+
+        // Initialize viewer when page loads
+        window.addEventListener('load', () => {
+            viewer = new ProductViewer();
+        });
+    </script>
+</body>
+</html>
